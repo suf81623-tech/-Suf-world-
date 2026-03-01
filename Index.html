@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Social Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --bg:#f5f6f8;
+  --card:#fff;
+  --border:#ddd;
+  --text:#111;
+  --primary:#1877f2;
+}
+
+.dark{
+  --bg:#121212;
+  --card:#1e1e1e;
+  --border:#333;
+  --text:#fff;
+}
+
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+header{
+  background:var(--card);
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
+  border-bottom:1px solid var(--border);
+}
+
+.container{
+  max-width:600px;
+  margin:auto;
+  padding:10px;
+}
+
+.profile{
+  background:var(--card);
+  padding:15px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.profile img{
+  width:70px;
+  height:70px;
+  border-radius:50%;
+  object-fit:cover;
+}
+
+.post-box{
+  background:var(--card);
+  padding:12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  margin-top:10px;
+}
+
+.post{
+  background:var(--card);
+  border-radius:10px;
+  border:1px solid var(--border);
+  margin-top:15px;
+  padding:10px;
+}
+
+.post-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.post-header img{
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  object-fit: cover;
+}
+
+.post img{
+  width:100%;
+  border-radius:8px;
+  margin-top:8px;
+}
+
+.actions{
+  margin-top:6px;
+}
+
+.comment{
+  margin-left:20px;
+  font-size:14px;
+}
+
+button{
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  suf world by<br> (saka umar faruk)
+  <button onclick="toggleDark()" style="float:right;">🌙</button>
+</header>
+
+<div class="container">
+
+<!-- Profile -->
+<div class="profile">
+  <img id="profilePic" src="https://via.placeholder.com/80">
+  <div>
+    <input type="text" id="usernameInput" placeholder="Your name">
+    <input type="file" id="profileImage" accept="image/*">
+    <button onclick="updateProfile()">Update Profile</button>
+  </div>
+</div>
+
+<!-- Create Post -->
+<div class="post-box">
+  <input type="file" id="postImage" accept="image/*">
+  <input type="text" id="postCaption" placeholder="Caption">
+  <button onclick="createPost()">Post</button>
+</div>
+
+<!-- Feed -->
+<div id="feed"></div>
+
+</div>
+
+<script>
+const BIN_ID = "69a43c51ae596e708f5511fd";
+const API_KEY = "$2a$10$22rnf9jqZanltTN2h.p51eEuy1cDDc7tG70N7qI7O/WYSwH1MLqk6";
+const CLOUD_NAME = "dp5sohzsl";
+const UPLOAD_PRESET = "Instaclone";
+
+
+let db = {
+  user:{ username:"Guest", profilePic:"" },
+  posts:[],
+  dark:false
+};
+
+// load
+async function load(){
+  try{
+    let res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`,{
+      headers:{ "X-Master-Key":API_KEY }
+    });
+    let data = await res.json();
+    db = data.record;
+    render();
+  }catch{
+    save();
+  }
+}
+
+// save
+async function save(){
+  await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`,{
+    method:"PUT",
+    headers:{
+      "Content-Type":"application/json",
+      "X-Master-Key":API_KEY
+    },
+    body:JSON.stringify(db)
+  });
+}
+
+// dark
+function toggleDark(){
+  db.dark = !db.dark;
+  document.body.classList.toggle("dark", db.dark);
+  save();
+}
+
+// update profile
+async function updateProfile(){
+  const file = document.getElementById("profileImage").files[0];
+  const name = document.getElementById("usernameInput").value;
+
+  if(name) db.user.username = name;
+
+  if(file){
+    const form = new FormData();
+    form.append("file", file);
+    form.append("upload_preset", UPLOAD_PRESET);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,{
+      method:"POST",
+      body:form
+    });
+
+    const data = await res.json();
+    db.user.profilePic = data.secure_url;
+  }
+
+  save();
+  render();
+}
+
+// create post
+async function createPost(){
+  const file = document.getElementById("postImage").files[0];
+  const caption = document.getElementById("postCaption").value;
+
+  if(!file){ alert("Select image"); return; }
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", UPLOAD_PRESET);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,{
+    method:"POST",
+    body:form
+  });
+
+  const data = await res.json();
+
+  db.posts.unshift({
+    id:Date.now(),
+    image:data.secure_url,
+    caption,
+    user:db.user,
+    likes:[],
+    comments:[]
+  });
+
+  save();
+  render();
+
+  document.getElementById("postCaption").value="";
+  document.getElementById("postImage").value="";
+}
+
+// like
+function likePost(id){
+  let post = db.posts.find(p=>p.id===id);
+  if(!post.likes.includes(db.user.username)){
+    post.likes.push(db.user.username);
+  }
+  save();
+  render();
+}
+
+// edit post
+function editPost(id){
+  let post = db.posts.find(p=>p.id===id);
+  let txt = prompt("Edit caption:", post.caption);
+  if(txt!==null){
+    post.caption = txt;
+    save();
+    render();
+  }
+}
+
+// delete
+function deletePost(id){
+  if(!confirm("Delete post?")) return;
+  db.posts = db.posts.filter(p=>p.id!==id);
+  save();
+  render();
+}
+
+// comments
+function addComment(postId){
+  let text = prompt("Comment:");
+  if(!text) return;
+
+  let post = db.posts.find(p=>p.id===postId);
+  post.comments.push({
+    id:Date.now(),
+    text,
+    user:db.user.username,
+    replies:[]
+  });
+
+  save();
+  render();
+}
+
+function replyComment(postId, commentId){
+  let text = prompt("Reply:");
+  if(!text) return;
+
+  let post = db.posts.find(p=>p.id===postId);
+  let c = post.comments.find(x=>x.id===commentId);
+
+  c.replies.push({
+    id:Date.now(),
+    text,
+    user:db.user.username
+  });
+
+  save();
+  render();
+}
+
+function editComment(postId, commentId){
+  let post = db.posts.find(p=>p.id===postId);
+  let c = post.comments.find(x=>x.id===commentId);
+  let txt = prompt("Edit comment:", c.text);
+
+  if(txt!==null){
+    c.text = txt;
+    save();
+    render();
+  }
+}
+
+// render
+function render(){
+  document.body.classList.toggle("dark", db.dark);
+  document.getElementById("profilePic").src = db.user.profilePic || "";
+  document.getElementById("usernameInput").value = db.user.username || "";
+
+  const feed = document.getElementById("feed");
+  feed.innerHTML="";
+
+  db.posts.forEach(post=>{
+    let div = document.createElement("div");
+    div.className="post";
+
+    div.innerHTML = `
+      <div class="post-header">
+        <img src="${post.user.profilePic}">
+        <b>${post.user.username}</b>
+      </div>
+
+      <img src="${post.image}">
+
+      <p>${post.caption}</p>
+
+      <div class="actions">
+        ❤️ ${post.likes.length}
+        <button onclick="likePost(${post.id})">Like</button>
+        <button onclick="editPost(${post.id})">Edit</button>
+        <button onclick="deletePost(${post.id})">Delete</button>
+        <button onclick="addComment(${post.id})">Comment</button>
+      </div>
+    `;
+
+    post.comments.forEach(c=>{
+      let cm = document.createElement("div");
+      cm.className="comment";
+      cm.innerHTML = `
+        <b>${c.user}</b>: ${c.text}
+        <button onclick="editComment(${post.id},${c.id})">Edit</button>
+        <button onclick="replyComment(${post.id},${c.id})">Reply</button>
+      `;
+
+      c.replies.forEach(r=>{
+        let rp = document.createElement("div");
+        rp.className="comment";
+        rp.innerHTML = `↳ <b>${r.user}</b>: ${r.text}`;
+        cm.appendChild(rp);
+      });
+
+      div.appendChild(cm);
+    });
+
+    feed.appendChild(div);
+  });
+}
+
+load();
+</script>
+
+</body>
+</html>
